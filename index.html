@@ -1,0 +1,938 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Python-Based Garden Simulator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.26.1/full/pyodide.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap');
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #0b0f19; color: #f3f4f6; }
+        .code-font { font-family: 'JetBrains Mono', monospace; }
+        .glass-card {
+            background: rgba(17, 24, 39, 0.7);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(55, 65, 81, 0.5);
+            box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
+            transition: all 0.3s ease;
+        }
+        .glass-card:hover { border-color: rgba(59, 130, 246, 0.3); box-shadow: 0 15px 35px -10px rgba(59, 130, 246, 0.15); }
+        .locked { opacity: 0.3; pointer-events: none; filter: blur(4px); transition: all 0.4s ease; }
+        .unlocked { opacity: 1; pointer-events: auto; filter: blur(0); }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #0b0f19; }
+        ::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #4b5563; }
+        .tree-connector { width: 2px; background: rgba(52, 211, 153, 0.5); margin: 0 auto; }
+        .tree-node {
+            background: rgba(17, 24, 39, 0.9);
+            border: 1px solid rgba(55, 65, 81, 0.7);
+            border-radius: 12px;
+            padding: 12px 18px;
+            min-width: 170px;
+            text-align: center;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
+        }
+        .tree-root { border-color: rgba(52, 211, 153, 0.5); background: rgba(6, 78, 59, 0.25); }
+        .tree-category { border-color: rgba(59, 130, 246, 0.5); background: rgba(30, 58, 138, 0.2); }
+        .tree-leaf { border-color: rgba(168, 85, 247, 0.5); background: rgba(88, 28, 135, 0.2); }
+        .pyodide-loading { animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        /* Growth stage visual helpers */
+        .stage-0 { font-size: 0.9rem; opacity: 0.7; }
+        .stage-1 { font-size: 1.1rem; }
+        .stage-2 { font-size: 1.35rem; }
+        .stage-3 { font-size: 1.6rem; }
+    </style>
+</head>
+<body class="min-h-screen p-4 md:p-6 flex flex-col justify-between overflow-x-hidden">
+
+    <!-- HEADER -->
+    <header class="w-full max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 pb-4 border-b border-gray-800">
+        <div class="flex items-center gap-3">
+            <div class="p-2.5 bg-blue-600/20 border border-blue-500/30 rounded-xl text-blue-400">
+                <i data-lucide="cpu" class="w-6 h-6"></i>
+            </div>
+            <div>
+                <h1 class="text-xl md:text-2xl font-extrabold tracking-tight text-white">
+                    Python Garden Simulator
+                    <span class="text-xs px-2 py-0.5 rounded-full bg-blue-900/60 text-blue-300 border border-blue-700/50">v0.2.0</span>
+                </h1>
+                <p class="text-xs text-gray-400 font-medium">Pyodide Wasm Runtime Active • SDG 2, 13, 15 Framework</p>
+            </div>
+        </div>
+        <div class="flex items-center gap-3">
+            <div class="glass-card px-4 py-2 rounded-xl flex flex-col items-end">
+                <span class="text-[10px] text-blue-400 uppercase tracking-widest font-bold">RUNTIME</span>
+                <span class="text-xs font-semibold text-emerald-400 flex items-center gap-1.5" id="runtime-status">
+                    <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Ready
+                </span>
+            </div>
+            <div class="glass-card px-4 py-2 rounded-xl flex flex-col items-end">
+                <span class="text-[10px] text-indigo-400 uppercase tracking-widest font-bold">DAY CYCLE</span>
+                <span class="text-sm font-extrabold text-white" id="day-counter">Day 1</span>
+            </div>
+        </div>
+    </header>
+
+    <main class="w-full max-w-7xl mx-auto flex flex-col gap-6 flex-grow">
+        <!-- MODULE CARDS -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+            <div id="card-oop" class="glass-card p-4 rounded-2xl border-l-4 border-l-blue-500">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-[10px] font-bold text-blue-400 uppercase tracking-wider">OOP MODULE</span>
+                    <i data-lucide="box" class="w-4 h-4 text-blue-400"></i>
+                </div>
+                <h4 class="text-sm font-bold text-white">Plant / Garden Classes</h4>
+                <p class="text-xs text-gray-400 mt-1">Encapsulation & State</p>
+            </div>
+            <div id="card-stack" class="glass-card p-4 rounded-2xl border-l-4 border-l-amber-500 locked">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-[10px] font-bold text-amber-400 uppercase tracking-wider">STACK MODULE</span>
+                    <i data-lucide="layers" class="w-4 h-4 text-amber-400"></i>
+                </div>
+                <h4 class="text-sm font-bold text-white">Action History (LIFO)</h4>
+                <p class="text-xs text-gray-400 mt-1">Undo Operations</p>
+            </div>
+            <div id="card-queue" class="glass-card p-4 rounded-2xl border-l-4 border-l-cyan-500 locked">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-[10px] font-bold text-cyan-400 uppercase tracking-wider">QUEUE MODULE</span>
+                    <i data-lucide="list-ordered" class="w-4 h-4 text-cyan-400"></i>
+                </div>
+                <h4 class="text-sm font-bold text-white">Weather Events (FIFO)</h4>
+                <p class="text-xs text-gray-400 mt-1">Climate Queue Stream</p>
+            </div>
+            <div id="card-tree" onclick="openTreeModule()" class="glass-card p-4 rounded-2xl border-l-4 border-l-emerald-500 locked cursor-pointer">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">TREE MODULE</span>
+                    <i data-lucide="git-branch" class="w-4 h-4 text-emerald-400"></i>
+                </div>
+                <h4 class="text-sm font-bold text-white">Plant Hierarchy</h4>
+                <p class="text-xs text-gray-400 mt-1">Taxonomy & Zones</p>
+            </div>
+            <!-- NEW: Traversal card -->
+            <div id="card-traversal" class="glass-card p-4 rounded-2xl border-l-4 border-l-purple-500 locked">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-[10px] font-bold text-purple-400 uppercase tracking-wider">TRAVERSAL</span>
+                    <i data-lucide="route" class="w-4 h-4 text-purple-400"></i>
+                </div>
+                <h4 class="text-sm font-bold text-white">BFS & DFS</h4>
+                <p class="text-xs text-gray-400 mt-1">Pre / In / Post Order</p>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            <div class="lg:col-span-8 flex flex-col gap-6">
+                <!-- Tabs -->
+                <div class="flex bg-gray-900/80 p-1.5 rounded-xl border border-gray-800 w-fit">
+                    <button onclick="switchTab('game')" id="tab-game" class="px-5 py-2 rounded-lg text-xs font-bold bg-blue-600 text-white shadow-md transition-all">Interactive Sanctuary</button>
+                    <button onclick="switchTab('code')" id="tab-code" class="px-5 py-2 rounded-lg text-xs font-bold text-gray-400 hover:text-white transition-all">Python Code Editor</button>
+                </div>
+
+                <!-- GAME VIEW -->
+                <div id="view-game" class="glass-card rounded-2xl p-6 locked min-h-[450px] flex flex-col justify-between">
+                    <div>
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 pb-4 border-b border-gray-800">
+                            <div>
+                                <h2 class="text-lg font-bold text-white flex items-center gap-2">
+                                    <i data-lucide="grid" class="w-5 h-5 text-blue-400"></i>
+                                    Garden Grid (2D Array Representation)
+                                </h2>
+                                <p class="text-xs text-gray-400 mt-1">Managed via Python 2D lists matrix structure (`grid[r][c]`). Plants grow when watered!</p>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span class="text-xs text-gray-300 font-medium">Seed Bag:</span>
+                                <select id="crop-selector" class="bg-gray-900 border border-gray-700 text-gray-100 text-xs rounded-xl px-3 py-2 outline-none focus:border-blue-500">
+                                    <option value="">Select Seed...</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div id="garden-grid" class="grid grid-cols-5 gap-3 max-w-lg mx-auto"></div>
+                    </div>
+
+                    <div class="mt-6 pt-4 border-t border-gray-800/60 flex flex-wrap gap-3">
+                        <button onclick="plantSelectedCrop()" class="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-lg shadow-emerald-900/20 transition-all">
+                            <i data-lucide="sprout" class="w-4 h-4"></i> Plant Selected Seed
+                        </button>
+                        <button onclick="triggerWaterPlot()" class="px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-lg shadow-blue-900/20 transition-all">
+                            <i data-lucide="droplets" class="w-4 h-4"></i> Water Plot
+                        </button>
+                        <button onclick="advanceDay()" class="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-lg shadow-indigo-900/20 transition-all">
+                            <i data-lucide="sun" class="w-4 h-4"></i> Advance Day
+                        </button>
+                        <button onclick="resetGarden()" class="px-4 py-2.5 bg-gray-700 hover:bg-gray-600 text-gray-200 rounded-xl text-xs font-bold flex items-center gap-2 border border-gray-600 transition-all">
+                            <i data-lucide="trash-2" class="w-4 h-4"></i> Reset Garden
+                        </button>
+                    </div>
+                </div>
+
+                <!-- CODE EDITOR -->
+                <div id="view-code" class="glass-card rounded-2xl p-6 flex flex-col hidden min-h-[450px]">
+                    <div class="flex items-center justify-between mb-3">
+                        <h2 class="font-bold text-sm text-white flex items-center gap-2">
+                            <i data-lucide="code" class="w-4 h-4 text-blue-400"></i> Student Python Lab Editor
+                        </h2>
+                        <select id="topic-selector" onchange="loadTopic()" class="bg-gray-900 border border-gray-700 text-gray-200 text-xs rounded-xl p-2 outline-none focus:border-blue-500"></select>
+                    </div>
+                    <textarea id="code-editor" class="flex-1 bg-[#05070d] border border-gray-800 rounded-xl p-4 code-font text-xs text-emerald-300 font-medium leading-relaxed min-h-[240px] outline-none focus:border-blue-500" spellcheck="false"></textarea>
+                    <div class="flex items-center justify-between mt-4">
+                        <button onclick="runPythonCode()" id="run-btn" class="bg-blue-600 hover:bg-blue-500 px-6 py-2.5 rounded-xl font-bold text-white text-xs flex items-center gap-2 shadow-lg shadow-blue-900/30 transition-all">
+                            <i data-lucide="play" class="w-4 h-4"></i> Execute Python Code
+                        </button>
+                        <span class="text-[11px] text-gray-400">Pyodide Client-side Wasm Execution</span>
+                    </div>
+                    <div id="output-console" class="mt-4 bg-black/80 border border-gray-800 rounded-xl p-3 text-[11px] max-h-36 overflow-auto font-mono whitespace-pre-wrap text-gray-300">
+                        Output console initialized...
+                    </div>
+                </div>
+            </div>
+
+            <!-- RIGHT PANELS -->
+            <div class="lg:col-span-4 flex flex-col gap-6">
+                <div id="stack-panel" class="glass-card rounded-2xl p-4 flex flex-col h-[230px] locked border-t-2 border-t-amber-500">
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="font-bold text-xs text-amber-400 uppercase tracking-wider flex items-center gap-2">
+                            <i data-lucide="history" class="w-4 h-4"></i> Action History — Stack
+                        </h3>
+                        <span class="text-[10px] text-gray-400">LIFO</span>
+                    </div>
+                    <div id="action-stack" class="flex-1 space-y-2 text-xs overflow-auto pr-1"></div>
+                    <button onclick="triggerUndo()" class="mt-3 w-full bg-gray-800 hover:bg-gray-700 text-amber-300 py-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 border border-gray-700 transition-all">
+                        <i data-lucide="undo-2" class="w-3.5 h-3.5"></i> Undo / Pop Stack
+                    </button>
+                </div>
+
+                <div id="climate-queue-panel" class="glass-card rounded-2xl p-4 flex flex-col h-[230px] locked border-t-2 border-t-cyan-500">
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="font-bold text-xs text-cyan-400 uppercase tracking-wider flex items-center gap-2">
+                            <i data-lucide="cloud-lightning" class="w-4 h-4"></i> Weather Events — Queue
+                        </h3>
+                        <span class="text-[10px] text-gray-400">FIFO</span>
+                    </div>
+                    <div id="climate-queue" class="flex-1 space-y-2 text-xs overflow-auto pr-1"></div>
+                    <button onclick="processQueueEvent()" class="mt-3 w-full bg-gray-800 hover:bg-gray-700 text-cyan-300 py-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 border border-gray-700 transition-all">
+                        <i data-lucide="skip-forward" class="w-3.5 h-3.5"></i> Dequeue Next Event
+                    </button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- TREE MODAL -->
+    <div id="tree-modal" class="hidden fixed inset-0 z-50 bg-black/70 backdrop-blur-sm p-4 flex items-center justify-center">
+        <div class="glass-card w-full max-w-3xl rounded-2xl p-6 max-h-[90vh] overflow-auto">
+            <div class="flex items-center justify-between mb-6 pb-4 border-b border-gray-800">
+                <div>
+                    <div class="flex items-center gap-2">
+                        <i data-lucide="git-branch" class="w-5 h-5 text-emerald-400"></i>
+                        <h2 class="text-lg font-bold text-white">Plant Hierarchy</h2>
+                    </div>
+                    <p class="text-xs text-gray-400 mt-1">Garden Flora Taxonomy</p>
+                </div>
+                <button onclick="closeTreeModule()" class="px-3 py-2 rounded-xl bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs font-bold border border-gray-700 transition-all">Close</button>
+            </div>
+            <div class="flex flex-col items-center py-6" id="tree-visual">
+                <div class="tree-node tree-root">
+                    <div class="text-emerald-400 text-xs font-bold uppercase tracking-wider mb-1">ROOT</div>
+                    <div class="text-sm font-bold text-white">🌱 Garden Flora Taxonomy</div>
+                </div>
+                <div class="tree-connector h-8"></div>
+                <div class="w-full flex justify-center gap-4 md:gap-16">
+                    <div class="flex flex-col items-center">
+                        <div class="tree-node tree-category">
+                            <div class="text-blue-400 text-xs font-bold uppercase tracking-wider mb-1">CATEGORY</div>
+                            <div class="text-sm font-bold text-white">🥕 Root Vegetables</div>
+                        </div>
+                        <div class="tree-connector h-8"></div>
+                        <div class="tree-node tree-leaf">
+                            <div class="text-purple-400 text-xs font-bold uppercase tracking-wider mb-1">LEAF</div>
+                            <div class="text-sm font-bold text-white">🥕 Carrot</div>
+                        </div>
+                    </div>
+                    <div class="flex flex-col items-center">
+                        <div class="tree-node tree-category">
+                            <div class="text-blue-400 text-xs font-bold uppercase tracking-wider mb-1">CATEGORY</div>
+                            <div class="text-sm font-bold text-white">🍅 Nightshades</div>
+                        </div>
+                        <div class="tree-connector h-8"></div>
+                        <div class="tree-node tree-leaf">
+                            <div class="text-purple-400 text-xs font-bold uppercase tracking-wider mb-1">LEAF</div>
+                            <div class="text-sm font-bold text-white">🍅 Tomato</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="mt-6 pt-4 border-t border-gray-800">
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div class="bg-gray-900/60 border border-gray-800 rounded-xl p-3">
+                        <p class="text-[10px] text-emerald-400 uppercase tracking-wider font-bold">Root</p>
+                        <p class="text-xs text-gray-300 mt-1">Garden Flora Taxonomy</p>
+                    </div>
+                    <div class="bg-gray-900/60 border border-gray-800 rounded-xl p-3">
+                        <p class="text-[10px] text-blue-400 uppercase tracking-wider font-bold">Categories</p>
+                        <p class="text-xs text-gray-300 mt-1">2 branches</p>
+                    </div>
+                    <div class="bg-gray-900/60 border border-gray-800 rounded-xl p-3">
+                        <p class="text-[10px] text-purple-400 uppercase tracking-wider font-bold">Plants</p>
+                        <p class="text-xs text-gray-300 mt-1">Carrot • Tomato</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer class="w-full max-w-7xl mx-auto mt-8 pt-4 border-t border-gray-800 text-center text-xs text-gray-500">
+        Python-Based Garden Simulator • Built with Tailwind CSS, Lucide Icons, and Pyodide Wasm.
+    </footer>
+
+    <script>
+        let pyodideInstance = null;
+        let savedCode = JSON.parse(localStorage.getItem("savedGardenCode")) || {};
+        let gardenPlants = {};
+        let actionStack = [];
+        let climateQueueList = ["Drought Warning", "Monsoon Rains", "Solar Heatwave"];
+        let selectedRow = 0, selectedCol = 0;
+        let currentDay = 1;
+
+        // Growth stage helpers
+        const STAGE_EMOJIS = {
+            0: "🌱",   // seed
+            1: "🌿",   // sprout
+            2: "🪴",   // young plant
+            3: null    // mature → use plant's real emoji
+        };
+        const STAGE_NAMES = ["Seed", "Sprout", "Young", "Mature"];
+
+        function saveGardenState() {
+            try {
+                localStorage.setItem("gardenPlants", JSON.stringify(gardenPlants));
+                localStorage.setItem("gardenDay", currentDay);
+            } catch (e) {}
+        }
+
+        function loadGardenState() {
+            try {
+                const saved = localStorage.getItem("gardenPlants");
+                if (saved) gardenPlants = JSON.parse(saved);
+                const day = localStorage.getItem("gardenDay");
+                if (day) {
+                    currentDay = parseInt(day) || 1;
+                    document.getElementById("day-counter").textContent = `Day ${currentDay}`;
+                }
+            } catch (e) {}
+        }
+
+        async function initPyodide() {
+            if (!pyodideInstance) {
+                const statusEl = document.getElementById("runtime-status");
+                if (statusEl) {
+                    statusEl.innerHTML = `<span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span> Loading Pyodide...`;
+                    statusEl.classList.add("pyodide-loading");
+                }
+
+                pyodideInstance = await loadPyodide();
+
+                pyodideInstance.globals.set("unlockFeature", unlockFeature);
+                pyodideInstance.globals.set("addPlantToGrid", addPlantToGrid);
+                pyodideInstance.globals.set("pushAction", pushAction);
+                pyodideInstance.globals.set("updateClimateQueue", updateClimateQueue);
+
+                // Existing bridges + new ones
+                pyodideInstance.globals.set("plantAt", function(r, c, name, emoji) {
+                    try {
+                        const row = Number(r), col = Number(c);
+                        if (row < 0 || row > 4 || col < 0 || col > 4) return;
+                        const idx = row * 5 + col;
+                        gardenPlants[idx] = {
+                            name: name || "Plant",
+                            emoji: emoji || "🌱",
+                            stage: 0               // always start as seed
+                        };
+                        renderGarden();
+                        pushAction(`Planted ${name} (seed) at (${row+1},${col+1}) via Python`);
+                        saveGardenState();
+                    } catch (e) { console.error(e); }
+                });
+
+                pyodideInstance.globals.set("waterAt", function(r, c) {
+                    try {
+                        const row = Number(r), col = Number(c);
+                        if (row < 0 || row > 4 || col < 0 || col > 4) return;
+                        const idx = row * 5 + col;
+                        const plant = gardenPlants[idx];
+                        if (!plant) {
+                            pushAction(`No plant to water at (${row+1},${col+1})`);
+                            return;
+                        }
+                        if (plant.stage < 3) {
+                            plant.stage += 1;
+                            renderGarden();
+                            pushAction(`Watered ${plant.name} → now ${STAGE_NAMES[plant.stage]} at (${row+1},${col+1})`);
+                            saveGardenState();
+                        } else {
+                            pushAction(`${plant.name} is already mature!`);
+                        }
+                    } catch (e) { console.error(e); }
+                });
+
+                pyodideInstance.globals.set("getGardenState", () => JSON.stringify(gardenPlants));
+                pyodideInstance.globals.set("clearGarden", () => {
+                    gardenPlants = {};
+                    renderGarden();
+                    pushAction("Garden cleared via Python");
+                    saveGardenState();
+                });
+                pyodideInstance.globals.set("enqueueClimate", (event) => {
+                    climateQueueList.push(String(event));
+                    updateClimateQueue(climateQueueList);
+                    pushAction(`Enqueued climate: ${event}`);
+                });
+                pyodideInstance.globals.set("getDay", () => currentDay);
+
+                await pyodideInstance.runPythonAsync(`
+import sys
+from js import document
+class Console:
+    def write(self, text):
+        if text and text.strip():
+            el = document.getElementById("output-console")
+            if el:
+                el.innerHTML += text.replace("\\n", "<br>")
+    def flush(self):
+        pass
+sys.stdout = Console()
+                `);
+
+                if (statusEl) {
+                    statusEl.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Ready`;
+                    statusEl.classList.remove("pyodide-loading");
+                }
+            }
+        }
+
+        function unlockFeature(feature) {
+            if (feature === "oop") {
+                document.getElementById("card-oop").classList.remove("locked");
+                document.getElementById("card-oop").classList.add("unlocked");
+            }
+            if (feature === "stack") {
+                document.getElementById("card-stack").classList.remove("locked");
+                document.getElementById("card-stack").classList.add("unlocked");
+                document.getElementById("stack-panel").classList.remove("locked");
+                document.getElementById("stack-panel").classList.add("unlocked");
+            }
+            if (feature === "queue") {
+                document.getElementById("card-queue").classList.remove("locked");
+                document.getElementById("card-queue").classList.add("unlocked");
+                document.getElementById("climate-queue-panel").classList.remove("locked");
+                document.getElementById("climate-queue-panel").classList.add("unlocked");
+            }
+            if (feature === "tree") {
+                document.getElementById("card-tree").classList.remove("locked");
+                document.getElementById("card-tree").classList.add("unlocked");
+                document.getElementById("view-game").classList.remove("locked");
+                document.getElementById("view-game").classList.add("unlocked");
+            }
+            // NEW
+            if (feature === "traversal") {
+                document.getElementById("card-traversal").classList.remove("locked");
+                document.getElementById("card-traversal").classList.add("unlocked");
+            }
+        }
+
+        function openTreeModule() {
+            const card = document.getElementById("card-tree");
+            if (card.classList.contains("locked")) {
+                showToast("Run Topic 4 first to unlock the Tree module.");
+                return;
+            }
+            document.getElementById("tree-modal").classList.remove("hidden");
+            lucide.createIcons();
+        }
+
+        function closeTreeModule() {
+            document.getElementById("tree-modal").classList.add("hidden");
+        }
+
+        function addPlantToGrid(pos, name) {
+            try {
+                let plant;
+                if (name && typeof name.toJs === "function") {
+                    plant = name.toJs({ dict_converter: Object.fromEntries });
+                    name.destroy();
+                } else {
+                    plant = name;
+                }
+                gardenPlants[pos] = {
+                    name: plant.name || "Unknown Plant",
+                    emoji: plant.emoji || "🌱",
+                    stage: plant.stage !== undefined ? plant.stage : 0
+                };
+                renderGarden();
+                saveGardenState();
+            } catch (error) {
+                console.error("addPlantToGrid error:", error);
+            }
+        }
+
+        function renderGarden() {
+            const grid = document.getElementById("garden-grid");
+            if (!grid) return;
+            grid.innerHTML = "";
+
+            for (let r = 0; r < 5; r++) {
+                for (let c = 0; c < 5; c++) {
+                    const idx = r * 5 + c;
+                    const cell = document.createElement("div");
+                    const isSelected = selectedRow === r && selectedCol === c;
+
+                    cell.className = `
+                        aspect-square rounded-xl flex flex-col items-center justify-center
+                        text-xs font-semibold cursor-pointer border transition-all
+                        ${isSelected
+                            ? "border-blue-500 bg-blue-950/40 ring-2 ring-blue-500/30"
+                            : "border-gray-800 bg-gray-900/60 hover:border-gray-700"}
+                    `;
+
+                    cell.onclick = () => {
+                        selectedRow = r;
+                        selectedCol = c;
+                        renderGarden();
+                    };
+
+                    const plant = gardenPlants[idx];
+                    if (plant) {
+                        const stage = plant.stage !== undefined ? plant.stage : 0;
+                        let displayEmoji = STAGE_EMOJIS[stage];
+                        if (stage === 3 || displayEmoji === null) {
+                            displayEmoji = plant.emoji || "🌱";
+                        }
+                        const stageLabel = STAGE_NAMES[stage] || "Seed";
+
+                        cell.innerHTML = `
+                            <span class="mb-0.5 stage-${stage}">${displayEmoji}</span>
+                            <span class="text-[9px] text-gray-300 leading-tight">${plant.name}</span>
+                            <span class="text-[8px] text-blue-400/80">${stageLabel}</span>
+                        `;
+                    } else {
+                        cell.innerHTML = `<span class="text-[10px] text-gray-500">Plot ${r + 1},${c + 1}</span>`;
+                    }
+                    grid.appendChild(cell);
+                }
+            }
+        }
+
+        function plantSelectedCrop() {
+            const selector = document.getElementById("crop-selector");
+            const cropName = selector.value;
+            if (!cropName || cropName === "Select Seed...") {
+                showToast("Please select a seed first.");
+                return;
+            }
+            const idx = selectedRow * 5 + selectedCol;
+            const emoji = cropName.includes("Tomato") ? "🍅" :
+                          cropName.includes("Corn") ? "🌽" : "🥕";
+
+            gardenPlants[idx] = {
+                name: cropName.replace(/[^\w\s]/g, "").trim() || cropName,
+                emoji: emoji,
+                stage: 0                    // always start as seed
+            };
+            renderGarden();
+            saveGardenState();
+            pushAction(`Planted ${cropName} (seed) at (${selectedRow + 1},${selectedCol + 1})`);
+        }
+
+        function triggerWaterPlot() {
+            const idx = selectedRow * 5 + selectedCol;
+            const plant = gardenPlants[idx];
+            if (!plant) {
+                showToast("No plant on this plot to water.");
+                pushAction(`Tried to water empty plot (${selectedRow + 1},${selectedCol + 1})`);
+                return;
+            }
+            if (plant.stage >= 3) {
+                showToast(`${plant.name} is already fully grown!`);
+                pushAction(`${plant.name} is already mature`);
+                return;
+            }
+            plant.stage += 1;
+            renderGarden();
+            saveGardenState();
+            const stageName = STAGE_NAMES[plant.stage];
+            pushAction(`Watered ${plant.name} → ${stageName} at (${selectedRow + 1},${selectedCol + 1})`);
+            showToast(`${plant.name} grew to ${stageName}!`);
+        }
+
+        function advanceDay() {
+            currentDay += 1;
+            document.getElementById("day-counter").textContent = `Day ${currentDay}`;
+            pushAction(`Advanced to Day ${currentDay}`);
+            if (climateQueueList.length > 0) {
+                const processed = climateQueueList.shift();
+                updateClimateQueue(climateQueueList);
+                showToast(`Day ${currentDay}: Processed "${processed}"`);
+            } else {
+                showToast(`Day ${currentDay} began. Climate queue empty.`);
+            }
+            saveGardenState();
+        }
+
+        function resetGarden() {
+            gardenPlants = {};
+            renderGarden();
+            pushAction("Garden reset");
+            saveGardenState();
+            showToast("Garden cleared.");
+        }
+
+        function updateClimateQueue(events) {
+            if (Array.isArray(events)) climateQueueList = events;
+            const container = document.getElementById("climate-queue");
+            container.innerHTML = "";
+            climateQueueList.forEach((evt, idx) => {
+                const div = document.createElement("div");
+                div.className = "p-2.5 bg-cyan-950/30 border border-cyan-900/40 rounded-xl text-xs flex items-center justify-between text-cyan-200";
+                div.innerHTML = `<span>${idx === 0 ? "▶ [HEAD] " : ""}${evt}</span>`;
+                container.appendChild(div);
+            });
+        }
+
+        function processQueueEvent() {
+            if (climateQueueList.length > 0) {
+                const processed = climateQueueList.shift();
+                updateClimateQueue(climateQueueList);
+                showToast(`Processed Event: ${processed}`);
+            } else {
+                showToast("Queue is empty.");
+            }
+        }
+
+        function pushAction(action) {
+            actionStack.push(action);
+            if (actionStack.length > 6) actionStack.shift();
+            renderActionStack();
+        }
+
+        function renderActionStack() {
+            const container = document.getElementById("action-stack");
+            container.innerHTML = "";
+            [...actionStack].reverse().forEach((act, idx) => {
+                const div = document.createElement("div");
+                div.className = "p-2.5 bg-amber-950/30 border-l-2 border-amber-500 rounded text-xs text-amber-200 flex items-center justify-between";
+                div.textContent = `${idx === 0 ? "TOP → " : "• "}${act}`;
+                container.appendChild(div);
+            });
+        }
+
+        function triggerUndo() {
+            if (actionStack.length > 0) {
+                const undone = actionStack.pop();
+                renderActionStack();
+                showToast(`Undid: ${undone}`);
+            } else {
+                showToast("Stack is empty.");
+            }
+        }
+
+        function showToast(msg) {
+            const toast = document.createElement("div");
+            toast.className = "fixed bottom-6 right-6 bg-gray-900 border border-blue-500 text-white px-4 py-2.5 rounded-xl shadow-2xl z-50 text-xs font-semibold animate-bounce";
+            toast.textContent = msg;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 2500);
+        }
+
+        async function runPythonCode() {
+            await initPyodide();
+            const code = document.getElementById("code-editor").value.trim();
+            const key = parseInt(document.getElementById("topic-selector").value);
+            const consoleEl = document.getElementById("output-console");
+            consoleEl.innerHTML = `<span class="text-amber-400">Running Python script...</span><br>`;
+
+            const runBtn = document.getElementById("run-btn");
+            if (runBtn) {
+                runBtn.disabled = true;
+                runBtn.classList.add("opacity-60", "cursor-not-allowed");
+            }
+
+            try {
+                await pyodideInstance.runPythonAsync(code);
+                savedCode[key] = code;
+                localStorage.setItem("savedGardenCode", JSON.stringify(savedCode));
+
+                if (key === 1) unlockFeature("oop");
+                if (key === 2) unlockFeature("stack");
+                if (key === 3) unlockFeature("queue");
+                if (key === 4) unlockFeature("tree");
+                if (key === 5) unlockFeature("traversal");   // NEW
+
+                consoleEl.innerHTML += `<br><span class="text-emerald-400">✓ Execution finished successfully.</span>`;
+            } catch (err) {
+                consoleEl.innerHTML += `<span class="text-red-400">Error: ${err.message}</span>`;
+            } finally {
+                if (runBtn) {
+                    runBtn.disabled = false;
+                    runBtn.classList.remove("opacity-60", "cursor-not-allowed");
+                }
+            }
+        }
+
+        const topicTemplates = {
+            1: {
+                title: "1. Python OOP (Plant & Garden Classes)",
+                code: `# Python OOP Concept + Growth
+
+class Plant:
+    def __init__(self, name, water_need, emoji="🌱"):
+        self.name = name
+        self.water_need = water_need
+        self.emoji = emoji
+        self.stage = 0          # 0=Seed, 1=Sprout, 2=Young, 3=Mature
+
+    def get_info(self):
+        stages = ["Seed", "Sprout", "Young", "Mature"]
+        return f"{self.name} ({stages[self.stage]}) needs {self.water_need}L"
+
+carrot = Plant("Carrot", 15, "🥕")
+tomato = Plant("Tomato", 20, "🍅")
+
+print(carrot.get_info())
+print(tomato.get_info())
+
+# Plant as seeds on the live grid
+plantAt(0, 0, carrot.name, carrot.emoji)
+plantAt(0, 1, tomato.name, tomato.emoji)
+
+unlockFeature("oop")
+print("OOP plants created as seeds!")`
+            },
+
+            2: {
+                title: "2. Action History (Stack Implementation)",
+                code: `# Stack (LIFO) Implementation
+
+class ActionStack:
+    def __init__(self):
+        self.stack = []
+    def push(self, item):
+        self.stack.append(item)
+        pushAction(item)
+    def pop(self):
+        if self.stack:
+            return self.stack.pop()
+        return None
+
+history = ActionStack()
+history.push("Planted Carrot at (1,1)")
+history.push("Applied Organic Fertilizer")
+history.push("Checked soil moisture")
+
+unlockFeature("stack")
+print("Stack initialized and tested successfully!")
+print(f"Current stack size: {len(history.stack)}")`
+            },
+
+            3: {
+                title: "3. Climate Queue (FIFO Implementation)",
+                code: `# Queue (FIFO) Implementation
+
+class ClimateQueue:
+    def __init__(self):
+        self.queue = ["Drought Warning", "Monsoon Rains"]
+    def enqueue(self, event):
+        self.queue.append(event)
+        updateClimateQueue(self.queue)
+
+cq = ClimateQueue()
+cq.enqueue("Soil Frost Alert")
+enqueueClimate("Gentle Morning Dew")
+
+unlockFeature("queue")
+print("Climate FIFO Queue processed successfully!")
+print("New events added to the live queue panel.")`
+            },
+
+            4: {
+                title: "4. Hierarchical Tree & 2D Grid Array",
+                code: `# Hierarchical Tree & 2D List Matrix + Growth
+
+class TreeNode:
+    def __init__(self, name):
+        self.name = name
+        self.children = []
+    def add(self, node):
+        self.children.append(node)
+
+root = TreeNode("Garden Flora Taxonomy")
+root.add(TreeNode("Root Vegetables (Carrot)"))
+root.add(TreeNode("Nightshades (Tomato)"))
+
+# 2D Grid
+grid_2d = [["⬜" for _ in range(5)] for _ in range(5)]
+grid_2d[0][0] = "🥕"
+grid_2d[1][1] = "🍅"
+
+# Plant seeds on the real interactive garden
+plantAt(2, 2, "Corn", "🌽")
+plantAt(3, 1, "Carrot", "🥕")
+
+# Water them a few times to grow
+waterAt(2, 2)
+waterAt(2, 2)
+waterAt(3, 1)
+
+unlockFeature("tree")
+print("Hierarchical Tree root:", root.name)
+print("Children:", [c.name for c in root.children])
+print("2D Array Grid: 5x5")
+print("Plants started as seeds and grew when watered!")
+print("Current day:", getDay())`
+            },
+
+            // ========== NEW TOPIC 5: BFS + DFS ==========
+            5: {
+                title: "5. Tree Traversals (BFS + DFS Pre/In/Post)",
+                code: `# BFS and DFS Traversals on Garden Hierarchy
+
+class TreeNode:
+    def __init__(self, name):
+        self.name = name
+        self.children = []          # general tree (not strictly binary)
+    def add(self, node):
+        self.children.append(node)
+
+# Build a richer tree for demonstration
+root = TreeNode("Garden Flora")
+root_veg = TreeNode("Root Vegetables")
+nightshade = TreeNode("Nightshades")
+leafy = TreeNode("Leafy Greens")
+
+root.add(root_veg)
+root.add(nightshade)
+root.add(leafy)
+
+root_veg.add(TreeNode("Carrot 🥕"))
+root_veg.add(TreeNode("Radish 🌶️"))
+nightshade.add(TreeNode("Tomato 🍅"))
+nightshade.add(TreeNode("Eggplant 🍆"))
+leafy.add(TreeNode("Lettuce 🥬"))
+leafy.add(TreeNode("Spinach 🍃"))
+
+# ---------- BFS (Level Order) using Queue ----------
+from collections import deque
+
+def bfs(root):
+    if not root:
+        return []
+    result = []
+    q = deque([root])
+    while q:
+        node = q.popleft()          # dequeue
+        result.append(node.name)
+        for child in node.children:
+            q.append(child)         # enqueue children
+    return result
+
+# ---------- DFS Preorder (Root → Left → Right) ----------
+def dfs_preorder(node, result=None):
+    if result is None:
+        result = []
+    if not node:
+        return result
+    result.append(node.name)        # visit root first
+    for child in node.children:
+        dfs_preorder(child, result)
+    return result
+
+# ---------- DFS Inorder (simplified for general tree) ----------
+# For general trees we visit first half of children, then root, then rest
+def dfs_inorder(node, result=None):
+    if result is None:
+        result = []
+    if not node:
+        return result
+    mid = len(node.children) // 2
+    for child in node.children[:mid]:
+        dfs_inorder(child, result)
+    result.append(node.name)        # visit root in the middle
+    for child in node.children[mid:]:
+        dfs_inorder(child, result)
+    return result
+
+# ---------- DFS Postorder (Left → Right → Root) ----------
+def dfs_postorder(node, result=None):
+    if result is None:
+        result = []
+    if not node:
+        return result
+    for child in node.children:
+        dfs_postorder(child, result)
+    result.append(node.name)        # visit root last
+    return result
+
+print("=== BFS (Level Order) ===")
+print(" → ".join(bfs(root)))
+
+print("\\n=== DFS Preorder ===")
+print(" → ".join(dfs_preorder(root)))
+
+print("\\n=== DFS Inorder ===")
+print(" → ".join(dfs_inorder(root)))
+
+print("\\n=== DFS Postorder ===")
+print(" → ".join(dfs_postorder(root)))
+
+# Bonus: plant something after traversal demo
+plantAt(4, 4, "Lettuce", "🥬")
+waterAt(4, 4)
+
+unlockFeature("traversal")
+print("\\nTraversals completed! Traversal module unlocked.")`
+            }
+        };
+
+        function loadTopic() {
+            const key = document.getElementById("topic-selector").value;
+            document.getElementById("code-editor").value = savedCode[key] || topicTemplates[key].code;
+        }
+
+        function switchTab(tab) {
+            document.getElementById("view-game").classList.toggle("hidden", tab !== "game");
+            document.getElementById("view-code").classList.toggle("hidden", tab !== "code");
+            document.getElementById("tab-game").classList.toggle("bg-blue-600", tab === "game");
+            document.getElementById("tab-game").classList.toggle("text-white", tab === "game");
+            document.getElementById("tab-code").classList.toggle("bg-blue-600", tab === "code");
+            document.getElementById("tab-code").classList.toggle("text-white", tab === "code");
+        }
+
+        window.onload = () => {
+            lucide.createIcons();
+            loadGardenState();
+            renderGarden();
+            updateClimateQueue(climateQueueList);
+            renderActionStack();
+
+            const select = document.getElementById("topic-selector");
+            Object.keys(topicTemplates).forEach(k => {
+                let opt = document.createElement("option");
+                opt.value = k;
+                opt.textContent = topicTemplates[k].title;
+                select.appendChild(opt);
+            });
+            loadTopic();
+            switchTab("game");
+
+            const cropSel = document.getElementById("crop-selector");
+            ["Carrot 🥕", "Tomato 🍅", "Corn 🌽"].forEach(c => {
+                let o = document.createElement("option");
+                o.value = c;
+                o.textContent = c;
+                cropSel.appendChild(o);
+            });
+        };
+    </script>
+</body>
+</html>
